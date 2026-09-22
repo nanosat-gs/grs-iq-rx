@@ -74,6 +74,19 @@ typedef struct
 } iq_t;
 
 /**
+ * \brief Buffer de lote do PUB de IQ.
+ *
+ * Alocado uma vez em main(), dimensionado pelo maior bloco que a libusb pode
+ * entregar. Existe para que o callback mande UMA mensagem ZMQ por bloco, em
+ * vez de uma por amostra: a 240 kS/s, uma mensagem por amostra sao 240 mil
+ * chamadas por segundo, e nem o publicador segura a taxa nem o assinante
+ * consegue drenar. O envelope loteado e o contrato contra o qual o
+ * demodulador e o gravador casam.
+ */
+static iq_t *iq_block = NULL;
+static size_t iq_block_len = 0U;
+
+/**
  * \brief .
  *
  * \param[in] signum .
@@ -116,15 +129,42 @@ static void rtlsdr_callback(unsigned char *buf, uint32_t len, void *ctx)
         }
 
         uint32_t j = 0;
-        for(j = 0; j < len; j += 2)
+        size_t n_samples = 0U;
+
+        /* j + 1 < len, e nao j < len: um bloco de tamanho impar traria meia
+         * amostra no fim, e ler o par seria ler um byte fora do buffer. */
+        for(j = 0; (j + 1U) < len; j += 2)
         {
-            iq_t iq = {0};
+            if (n_samples >= iq_block_len)
+            {
+                /* Bloco maior do que o previsto. Publica o que cabe em vez de
+                 * escrever fora do buffer; nao deve acontecer, porque a
+                 * alocacao usa o mesmo out_block_size passado ao
+                 * rtlsdr_read_async. */
+                if (verbose)
+                {
+                    fprintf(stderr, "Block larger than the IQ buffer, truncating!\n\r");
+                }
 
-            iq.i = (buf[j] - 127.5f) / 127.5f;
-            iq.q = (buf[j + 1] - 127.5f) / 127.5f;
+                break;
+            }
 
-            /* Send via pub socket */
-            if (zmq_send(zmq_publisher, &iq, sizeof(iq_t), 0) != sizeof(iq_t))
+            iq_block[n_samples].i = (buf[j] - 127.5f) / 127.5f;
+            iq_block[n_samples].q = (buf[j + 1] - 127.5f) / 127.5f;
+            n_samples++;
+        }
+
+        /* UMA mensagem por bloco, SEM frame de topico.
+         *
+         * Sem topico de proposito: o demodulador faz um recv() simples, e um
+         * frame de topico na frente viraria a primeira mensagem dele. A
+         * impl. Python deste mesmo bloco prefixa "iq_data", e e por isso que
+         * ela nao casa com o demodulador. */
+        if (n_samples > 0U)
+        {
+            size_t payload_len = n_samples * sizeof(iq_t);
+
+            if (zmq_send(zmq_publisher, iq_block, payload_len, 0) != (int)payload_len)
             {
                 if (verbose)
                 {
@@ -244,6 +284,18 @@ int main(int argc, char *argv[])
     }
 
     buffer = malloc(out_block_size * sizeof(uint8_t));
+
+    /* Cada amostra sao dois bytes crus do dongle, logo um bloco traz no
+     * maximo out_block_size/2 amostras. */
+    iq_block_len = (size_t)out_block_size / 2U;
+    iq_block = malloc(iq_block_len * sizeof(iq_t));
+
+    if ((buffer == NULL) || (iq_block == NULL))
+    {
+        fprintf(stderr, "Failed to allocate the IQ buffers!\n\r");
+
+        exit(EXIT_FAILURE);
+    }
 
     if (dev_index < 0)
     {
@@ -484,6 +536,12 @@ void print_usage(char *sw_name)
 
 void cleanup(void)
 {
+    if (iq_block)
+    {
+        free(iq_block);
+        iq_block = NULL;
+    }
+
     if (dev)
     {
         rtlsdr_close(dev);
