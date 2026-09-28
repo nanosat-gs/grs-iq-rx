@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRS IQ RX — USRP</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2330; --line: #2a3342;
+    --text: #e6edf3; --muted: #8b98a9; --accent: #4cc2ff;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+  .chip { font: 12px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+  .chip.ok { color: var(--ok); border-color: var(--ok); }
+  .chip.warn { color: var(--warn); border-color: var(--warn); }
+  .chip.bad { color: var(--bad); border-color: var(--bad); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1400px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .field { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 4px 12px; margin: 8px 0; }
+  @media (max-width: 520px) { .field { grid-template-columns: 1fr; } }
+  .field label { color: var(--muted); font-size: 13px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; grid-column: 2; }
+  @media (max-width: 520px) { .hint { grid-column: 1; } }
+  input[type=text], input[type=number], select {
+    width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; padding: 6px 8px; font: 13px var(--mono);
+  }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #001018; border-color: var(--accent); font-weight: 600; }
+  button.danger:hover { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .45; cursor: default; }
+  .kv { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+  .msg { font-size: 13px; padding: 8px 10px; border-radius: 4px; margin-top: 10px; }
+  .msg.bad { background: #3a1417; color: #ffb3b0; }
+  .msg.warn { background: #3a2a0c; color: #f0c674; }
+  .msg.ok { background: #12361f; color: #9be9a8; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-bottom: 10px; }
+  .stats b { display: block; font: 600 18px var(--mono); } .stats span { font-size: 11px; color: var(--muted); }
+  canvas { width: 100%; height: 180px; display: block; background: #05080c; border-radius: 4px; }
+  ol.check { margin: 0; padding-left: 20px; } ol.check li { margin: 4px 0; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+  #events { font: 12px var(--mono); max-height: 220px; overflow-y: auto; }
+  #events div { padding: 2px 0; border-bottom: 1px solid var(--line); }
+  #events span { color: var(--muted); margin-right: 8px; }
+  .dirty { color: var(--warn); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font: 12px var(--mono); margin-top: 8px; }
+  th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GRS IQ RX — USRP</h1>
+  <span class="chip" id="chip-state">carregando…</span>
+  <span class="chip" id="chip-device">–</span>
+  <span class="chip" id="chip-rate">–</span>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <h2>1 · Onde está o rádio</h2>
+      <div class="field">
+        <label for="f-address">Endereço IP do USRP</label>
+        <input type="text" id="f-address" data-key="address" placeholder="192.168.10.2">
+        <p class="hint">O N210 sai de fábrica em <code>192.168.10.2</code>.</p>
+      </div>
+      <div class="field">
+        <label for="f-device_args">Argumentos extras do UHD</label>
+        <input type="text" id="f-device_args" data-key="device_args" placeholder="ex.: recv_frame_size=1472">
+        <p class="hint">Opcional, <code>chave=valor,chave=valor</code>. Use <code>recv_frame_size=1472</code> se a rede não passar jumbo frames.</p>
+      </div>
+      <div class="row">
+        <button id="btn-probe">Testar conexão</button>
+        <span class="hint" style="margin:0">procura o USRP nesse IP sem abrir sessão</span>
+      </div>
+      <div id="probe-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Como receber</h2>
+      <div class="field">
+        <label for="f-freq">Frequência central</label>
+        <input type="number" id="f-freq" step="0.0001" data-key="center_frequency_hz" data-scale="1e6">
+        <p class="hint">MHz. 145,9 MHz é a beacon do FS-1, usada como exemplo até a coordenação do FS-2.</p>
+      </div>
+      <div class="field">
+        <label for="f-rate">Taxa pedida ao USRP</label>
+        <input type="number" id="f-rate" step="0.001" data-key="sample_rate_hz" data-scale="1e3">
+        <p class="hint" id="rate-hint">kS/s.</p>
+      </div>
+      <div class="field">
+        <label for="f-out-rate">Taxa publicada (cano)</label>
+        <input type="number" id="f-out-rate" step="0.001" data-key="output_rate_hz" data-scale="1e3">
+        <p class="hint">kS/s. O contrato da :5556 — o demodulador espera 240 (50 amostras por símbolo a 4800 baud). O serviço reamostra por uma razão exata; se não houver, ele recusa conectar em vez de publicar na taxa errada.</p>
+      </div>
+      <div class="field">
+        <label for="f-gain">Ganho</label>
+        <input type="number" id="f-gain" step="0.5" data-key="gain_db" placeholder="vazio = não mexer">
+        <p class="hint" id="gain-hint">dB. Vazio deixa o ganho que a daughterboard já estiver usando.</p>
+      </div>
+      <div class="field">
+        <label for="f-antenna">Antena</label>
+        <select id="f-antenna" data-key="antenna"><option value="">padrão da daughterboard</option></select>
+        <p class="hint">As opções aparecem depois da primeira conexão.</p>
+      </div>
+      <div class="field">
+        <label for="f-channel">Canal RX</label>
+        <input type="number" id="f-channel" min="0" step="1" data-key="channel">
+      </div>
+      <div class="field">
+        <label for="f-clock">Referência de relógio</label>
+        <select id="f-clock" data-key="clock_source"></select>
+        <p class="hint">internal, ou external com 10 MHz na entrada REF, ou gpsdo se o N210 tiver o módulo GPS.</p>
+      </div>
+      <div class="field">
+        <label for="f-time">Referência de tempo</label>
+        <select id="f-time" data-key="time_source"></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Ligação com a estação</h2>
+      <div class="field">
+        <label for="f-publish">Publicar IQ em</label>
+        <input type="text" id="f-publish" data-key="publish_bind">
+        <p class="hint">O demodulador e o gravador escutam aqui. Padrão <code>tcp://*:5556</code>.</p>
+      </div>
+      <div class="field">
+        <label for="f-tune">Sintonia (Doppler) de</label>
+        <input type="text" id="f-tune" data-key="tune_source" placeholder="vazio = sintonia fixa">
+        <p class="hint">PUB do frequency-synthesizer, ex.: <code>tcp://grs-frequency-synthesizer:5557</code>.</p>
+      </div>
+      <div class="field">
+        <label for="f-block">Amostras por mensagem</label>
+        <input type="number" id="f-block" min="256" step="1" data-key="block_samples">
+      </div>
+      <div class="field">
+        <label for="f-auto">Conectar sozinho</label>
+        <label style="color:var(--text)"><input type="checkbox" id="f-auto" data-key="autoconnect"> ao subir o container, e tentar de novo se cair</label>
+      </div>
+      <div class="row">
+        <button class="primary" id="btn-save">Salvar configuração</button>
+        <span class="dirty" id="dirty" hidden>alterações não salvas</span>
+      </div>
+      <div id="save-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>Antes de conectar — checklist</h2>
+      <ol class="check">
+        <li><b>Cabo Gigabit</b> do N210 direto ao PC da estação (ou num switch Gigabit).</li>
+        <li><b>PC na mesma sub-rede do rádio</b>: por exemplo <code>192.168.10.1/24</code> na placa ligada a ele.</li>
+        <li><b>Imagem de FPGA/firmware</b> compatível com o UHD 4.3 deste serviço. Se o teste achar o rádio mas a conexão falhar falando de "compat number", grave as imagens com <code>uhd_image_loader</code> (vem na imagem, pacote <code>uhd-host</code>) depois de <code>uhd_images_downloader</code>.</li>
+        <li><b>Rede do container</b>: o USRP fala UDP. Num host Linux, prefira <code>network_mode: host</code> para este serviço; atrás do NAT do Docker, a descoberta por broadcast não funciona (o teste por IP funciona).</li>
+        <li>Depois de conectar, confira em "O que o USRP aceitou" a <b>taxa entregue</b> e a <b>reamostragem</b>: a :5556 tem de sair a 240 kS/s, a taxa que o demodulador espera.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Sessão</h2>
+      <div class="kv">
+        <dt>Estado</dt><dd id="s-state">–</dd>
+        <dt>Endereço UHD</dt><dd id="s-device">–</dd>
+      </div>
+      <div class="row">
+        <button class="primary" id="btn-connect">Conectar</button>
+        <button class="danger" id="btn-disconnect">Desconectar</button>
+      </div>
+      <div id="s-error"></div>
+      <div id="s-warnings"></div>
+    </div>
+
+    <div class="card">
+      <h2>O que o USRP aceitou</h2>
+      <p class="hint" id="actual-empty" style="margin:0">Aparece depois de conectar.</p>
+      <dl class="kv" id="actual" hidden>
+        <dt>Taxa entregue</dt><dd id="a-rate"></dd>
+        <dt>Reamostragem</dt><dd id="a-resample"></dd>
+        <dt>Sintonia real</dt><dd id="a-freq"></dd>
+        <dt>Ganho</dt><dd id="a-gain"></dd>
+        <dt>Antena</dt><dd id="a-antenna"></dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Recepção ao vivo</h2>
+      <div class="stats">
+        <div><b id="st-rate">–</b><span>amostras/s medidas</span></div>
+        <div><b id="st-blocks">0</b><span>lotes publicados</span></div>
+        <div><b id="st-over">0</b><span>estouros</span></div>
+        <div><b id="st-err">0</b><span>erros</span></div>
+      </div>
+      <canvas id="spectrum"></canvas>
+      <p class="hint" style="margin-top:6px">Espectro do último lote, centro = frequência sintonizada.</p>
+    </div>
+
+    <div class="card">
+      <h2>Aparelho</h2>
+      <p class="hint" id="info-empty" style="margin:0">Aparece depois da primeira conexão.</p>
+      <dl class="kv" id="info" hidden>
+        <dt>Placa-mãe</dt><dd id="i-mboard"></dd>
+        <dt>Daughterboard</dt><dd id="i-subdev"></dd>
+        <dt>Canais RX</dt><dd id="i-channels"></dd>
+        <dt>Antenas</dt><dd id="i-antennas"></dd>
+        <dt>Faixa de ganho</dt><dd id="i-gain"></dd>
+        <dt>Faixa de frequência</dt><dd id="i-freq"></dd>
+        <dt>Referências</dt><dd id="i-sources"></dd>
+        <dt>Sensores</dt><dd id="i-sensors"></dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Eventos</h2>
+      <div id="events"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SOURCES = ["internal", "external", "mimo", "gpsdo"];
+const N210_MASTER_CLOCK = 100e6;
+let state = null;
+let formLoaded = false;
+let dirty = false;
+
+for (const id of ["f-clock", "f-time"]) {
+  for (const s of SOURCES) {
+    const o = document.createElement("option");
+    o.value = s; o.textContent = s;
+    $(id).appendChild(o);
+  }
+}
+
+// --- comunicação --------------------------------------------------------------
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "erro " + response.status);
+  return data;
+}
+
+async function poll() {
+  try {
+    const response = await fetch("/api/state");
+    render(await response.json());
+  } catch (error) {
+    setChip($("chip-state"), "sem conexão com o serviço", "bad");
+  }
+  setTimeout(poll, 700);
+}
+
+async function pollSpectrum() {
+  try {
+    const response = await fetch("/api/spectrum");
+    const db = await response.json();
+    drawSpectrum(db);
+  } catch (error) { /* o poll já mostra a queda */ }
+  setTimeout(pollSpectrum, 250);
+}
+
+function message(container, kind, text) {
+  container.replaceChildren();
+  if (!text) return;
+  const div = document.createElement("div");
+  div.className = "msg " + kind;
+  div.textContent = text;
+  container.appendChild(div);
+}
+
+function setChip(el, text, kind) {
+  el.textContent = text;
+  el.className = "chip" + (kind ? " " + kind : "");
+}
+
+// --- formulário -----------------------------------------------------------------
+
+function fieldValue(el) {
+  const key = el.dataset.key;
+  if (el.type === "checkbox") return el.checked;
+  if (key === "gain_db") return el.value.trim() === "" ? null : Number(el.value);
+  if (key === "channel" || key === "block_samples") return Math.round(Number(el.value));
+  if (el.dataset.scale) return Math.round(Number(el.value) * Number(el.dataset.scale) * 1000) / 1000;
+  return el.value;
+}
+
+function fillForm(config) {
+  for (const el of document.querySelectorAll("[data-key]")) {
+    const value = config[el.dataset.key];
+    if (el.type === "checkbox") el.checked = !!value;
+    else if (el.tagName === "SELECT" && value && ![...el.options].some((o) => o.value === value)) {
+      // Opção salva que a lista ainda não conhece (antes da 1ª conexão): sem
+      // isto o select zeraria em silêncio e o próximo Salvar apagaria a escolha.
+      const o = document.createElement("option");
+      o.value = value; o.textContent = value;
+      el.appendChild(o);
+      el.value = value;
+    }
+    else if (value === null || value === undefined) el.value = "";
+    else if (el.dataset.scale) el.value = value / Number(el.dataset.scale);
+    else el.value = value;
+  }
+  updateRateHint();
+  setDirty(false);
+}
+
+function readForm() {
+  const config = {};
+  for (const el of document.querySelectorAll("[data-key]")) config[el.dataset.key] = fieldValue(el);
+  return config;
+}
+
+function setDirty(value) { dirty = value; $("dirty").hidden = !value; }
+
+for (const el of document.querySelectorAll("[data-key]")) {
+  el.addEventListener("input", () => { setDirty(true); if (el.id === "f-rate") updateRateHint(); });
+  el.addEventListener("change", () => setDirty(true));
+}
+
+function updateRateHint() {
+  const rate = Number($("f-rate").value) * 1e3;
+  if (!(rate > 0)) { $("rate-hint").textContent = "kS/s."; return; }
+  const divider = Math.max(1, Math.round(N210_MASTER_CLOCK / rate));
+  const delivered = N210_MASTER_CLOCK / divider;
+  const exact = Math.abs(delivered - rate) < 0.5;
+  $("rate-hint").textContent = exact
+    ? `kS/s. No N210 (relógio de 100 MHz ÷ ${divider}) essa taxa é exata. 250 é o padrão: 250 → 240 é a razão exata 24/25.`
+    : `kS/s. O N210 só gera 100 MHz ÷ N: pedindo isto, ele entrega ~${(delivered / 1e3).toFixed(3)} kS/s, que provavelmente não tem razão exata com a taxa do cano — a conexão seria recusada. Use 250.`;
+}
+
+// --- estado -> tela -------------------------------------------------------------
+
+const STATE_LABEL = {
+  desconectado: ["desconectado", ""],
+  conectando: ["conectando…", "warn"],
+  recebendo: ["recebendo", "ok"],
+  erro: ["erro — tentando de novo", "bad"],
+};
+
+function mhz(hz) { return (hz / 1e6).toFixed(6) + " MHz"; }
+
+function render(s) {
+  state = s;
+  if (!formLoaded || !dirty) { if (!formLoaded || !editingForm()) fillForm(s.config); formLoaded = true; }
+
+  const [label, kind] = STATE_LABEL[s.state] || [s.state, ""];
+  const shown = s.state === "erro" && !s.want_running ? ["erro", "bad"] : [label, kind];
+  setChip($("chip-state"), shown[0], shown[1]);
+  $("s-state").textContent = shown[0];
+  setChip($("chip-device"), s.device_string, "");
+  $("s-device").textContent = s.device_string;
+  $("btn-connect").disabled = s.want_running;
+  $("btn-disconnect").disabled = !s.want_running;
+
+  message($("s-error"), "bad", s.last_error ? "Último erro: " + s.last_error : "");
+  const warnings = $("s-warnings");
+  warnings.replaceChildren();
+  for (const w of s.warnings) {
+    const div = document.createElement("div");
+    div.className = "msg warn"; div.textContent = w;
+    warnings.appendChild(div);
+  }
+
+  if (s.actual) {
+    $("actual").hidden = false; $("actual-empty").hidden = true;
+    $("a-rate").textContent = s.actual.sample_rate_hz.toFixed(3) + " S/s";
+    $("a-resample").textContent = s.resampling
+      ? `${s.resampling} → publica ${s.output_rate_hz.toFixed(0)} S/s`
+      : `nenhuma — publica direto a ${s.output_rate_hz.toFixed(0)} S/s`;
+    $("a-freq").textContent = mhz(s.actual.center_frequency_hz);
+    $("a-gain").textContent = s.actual.gain_db.toFixed(1) + " dB";
+    $("a-antenna").textContent = s.actual.antenna;
+    setChip($("chip-rate"), (s.output_rate_hz / 1e3).toFixed(1) + " kS/s publicados", "");
+  } else {
+    $("actual").hidden = true; $("actual-empty").hidden = false;
+    setChip($("chip-rate"), "sem sessão", "");
+  }
+
+  if (s.info) {
+    $("info").hidden = false; $("info-empty").hidden = true;
+    const i = s.info;
+    $("i-mboard").textContent = i.mboard;
+    $("i-subdev").textContent = i.subdev;
+    $("i-channels").textContent = i.channels;
+    $("i-antennas").textContent = i.antennas.join(", ");
+    $("i-gain").textContent = `${i.gain_range_db[0]} a ${i.gain_range_db[1]} dB, passo ${i.gain_range_db[2]}`;
+    $("i-freq").textContent = `${(i.freq_range_hz[0] / 1e6).toFixed(1)} a ${(i.freq_range_hz[1] / 1e6).toFixed(1)} MHz`;
+    $("i-sources").textContent = `relógio: ${i.clock_sources.join(", ")} · tempo: ${i.time_sources.join(", ")}`;
+    $("i-sensors").textContent = i.sensors.join(", ") || "–";
+    $("gain-hint").textContent = `dB, de ${i.gain_range_db[0]} a ${i.gain_range_db[1]}. Vazio = não mexer.`;
+    syncAntennas(i.antennas);
+  }
+
+  const st = s.stats;
+  $("st-rate").textContent = st.measured_rate ? (st.measured_rate / 1e3).toFixed(1) + " k" : "0";
+  $("st-blocks").textContent = st.blocks;
+  $("st-over").textContent = st.overflows;
+  $("st-err").textContent = st.errors;
+
+  const events = $("events");
+  events.replaceChildren();
+  for (const e of s.events) {
+    const div = document.createElement("div");
+    const at = document.createElement("span");
+    at.textContent = e.at;
+    div.appendChild(at);
+    div.appendChild(document.createTextNode(e.message));
+    events.appendChild(div);
+  }
+}
+
+function editingForm() {
+  const el = document.activeElement;
+  return el && el.dataset && el.dataset.key !== undefined;
+}
+
+function syncAntennas(antennas) {
+  const select = $("f-antenna");
+  const current = select.value;
+  const have = [...select.options].map((o) => o.value).filter(Boolean);
+  if (have.join() === antennas.join()) return;
+  select.replaceChildren();
+  const def = document.createElement("option");
+  def.value = ""; def.textContent = "padrão da daughterboard";
+  select.appendChild(def);
+  for (const a of antennas) {
+    const o = document.createElement("option");
+    o.value = a; o.textContent = a;
+    select.appendChild(o);
+  }
+  select.value = antennas.includes(current) ? current : (state && state.config.antenna) || "";
+}
+
+// --- espectro ---------------------------------------------------------------------
+
+function drawSpectrum(db) {
+  const canvas = $("spectrum");
+  const ratio = window.devicePixelRatio || 1;
+  const W = Math.round(canvas.clientWidth * ratio), H = Math.round(canvas.clientHeight * ratio);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#05080c"; ctx.fillRect(0, 0, W, H);
+  if (!db.length) {
+    ctx.fillStyle = "#5c6b80"; ctx.font = `${12 * ratio}px ui-monospace, monospace`;
+    ctx.fillText("sem amostras", 10 * ratio, 20 * ratio);
+    return;
+  }
+  const sorted = [...db].sort((a, b) => a - b);
+  const floor = sorted[Math.floor(sorted.length / 2)];
+  const top = floor + 60, bottom = floor - 10;
+  const y = (v) => H - ((Math.max(bottom, Math.min(top, v)) - bottom) / (top - bottom)) * H;
+  ctx.strokeStyle = "#1a2230";
+  for (let v = Math.ceil(bottom / 10) * 10; v <= top; v += 10) { ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(W, y(v)); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+  ctx.strokeStyle = "#4cc2ff"; ctx.lineWidth = 1.5 * ratio; ctx.beginPath();
+  db.forEach((v, i) => { const x = (i / (db.length - 1)) * W; if (i) ctx.lineTo(x, y(v)); else ctx.moveTo(x, y(v)); });
+  ctx.stroke();
+}
+
+// --- botões -----------------------------------------------------------------------
+
+$("btn-save").addEventListener("click", async () => {
+  try {
+    const s = await post("/api/config", readForm());
+    setDirty(false);
+    fillForm(s.config);
+    message($("save-result"), "ok", s.want_running
+      ? "Salvo. A sessão está sendo reaberta com a configuração nova."
+      : "Salvo. Clique em Conectar para usar.");
+    render(s);
+  } catch (error) {
+    message($("save-result"), "bad", error.message);
+  }
+});
+
+$("btn-connect").addEventListener("click", async () => {
+  if (dirty) { message($("save-result"), "warn", "Há alterações não salvas — salve antes de conectar, ou elas não valem."); return; }
+  try { render(await post("/api/connect")); } catch (error) { message($("s-error"), "bad", error.message); }
+});
+$("btn-disconnect").addEventListener("click", async () => {
+  try { render(await post("/api/disconnect")); } catch (error) { message($("s-error"), "bad", error.message); }
+});
+
+$("btn-probe").addEventListener("click", async () => {
+  const box = $("probe-result");
+  message(box, "warn", "procurando…");
+  try {
+    const result = await post("/api/probe", { address: $("f-address").value.trim() });
+    if (result.error) { message(box, "bad", "O UHD recusou a busca: " + result.error); return; }
+    if (!result.found.length) {
+      message(box, "bad", "Ninguém respondeu nesse IP. Confira o cabo, a sub-rede do PC e o IP do rádio (checklist abaixo).");
+      return;
+    }
+    box.replaceChildren();
+    const ok = document.createElement("div");
+    ok.className = "msg ok";
+    ok.textContent = `${result.found.length} USRP respondeu:`;
+    box.appendChild(ok);
+    const table = document.createElement("table");
+    const keys = ["product", "type", "serial", "name", "addr"];
+    const head = document.createElement("tr");
+    for (const k of keys) { const th = document.createElement("th"); th.textContent = k; head.appendChild(th); }
+    table.appendChild(head);
+    for (const dev of result.found) {
+      const tr = document.createElement("tr");
+      for (const k of keys) { const td = document.createElement("td"); td.textContent = dev[k] || "–"; tr.appendChild(td); }
+      table.appendChild(tr);
+    }
+    box.appendChild(table);
+  } catch (error) {
+    message(box, "bad", error.message);
+  }
+});
+
+poll();
+pollSpectrum();
+</script>
+</body>
+</html>

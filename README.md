@@ -29,6 +29,16 @@
 
 SDR IQ receiver application of the SpaceLab's ground station. This application reads IQ samples from an SDR (RTL-SDR for now) and transmits it over a Pub/Sub ZMQ socket.
 
+### USRP (branch `station`)
+
+The [`usrp/`](usrp/) folder holds a second receiver, in Python on top of
+`python3-uhd`, for the USRP N210 used by the nanosat-gs station. It
+publishes the same envelope as the C receiver (one batch per message, no
+topic frame, `cf32_le`, on `:5556`), resamples from a rate the N210 can
+produce exactly (250 kS/s) to the pipeline rate (240 kS/s), follows `tune`
+on `:5557`, and serves a configuration panel (device address, reception,
+connection test) on `:8091`. See [usrp/README.md](usrp/README.md).
+
 ## Dependencies
 
 * librtlsdr-dev (>= 2.0.1-2)
