@@ -38,6 +38,29 @@ def test_sem_arquivo_vale_o_padrao(tmp_path):
     assert load_config(tmp_path / "nao-existe.json") == SdrConfig()
 
 
+def test_sem_arquivo_o_tune_vem_do_padrao_do_compose(tmp_path):
+    config = load_config(tmp_path / "nao-existe.json",
+                         default_tune_source="tcp://grs-frequency-synthesizer:5557")
+
+    assert config.tune_source == "tcp://grs-frequency-synthesizer:5557"
+
+
+def test_arquivo_salvo_vence_o_padrao_mesmo_vazio(tmp_path):
+    """O operador escolheu sintonia fixa no painel: o padrão do compose não
+    pode religar o tune por baixo dele."""
+    path = tmp_path / "sdr.json"
+    save_config(path, SdrConfig(address="192.168.10.2", tune_source=""))
+
+    config = load_config(path, default_tune_source="tcp://grs-frequency-synthesizer:5557")
+
+    assert config.tune_source == ""
+
+
+def test_padrao_de_tune_invalido_e_recusado(tmp_path):
+    with pytest.raises(ValueError, match="tune_source"):
+        load_config(tmp_path / "nao-existe.json", default_tune_source="localhost:5557")
+
+
 def test_arquivo_com_campo_desconhecido_derruba_o_boot(tmp_path):
     path = tmp_path / "sdr.json"
     path.write_text(json.dumps({"adress": "10.0.0.5"}))  # typo de propósito

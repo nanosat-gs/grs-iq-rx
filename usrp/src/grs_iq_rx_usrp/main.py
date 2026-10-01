@@ -7,6 +7,8 @@
     HTTP :8091   painel: endereço do USRP, recepção, teste de conexão
 
 Configuração em GRS_IQ_RX_CONFIG (JSON num volume), editada pelo painel.
+Enquanto não houver configuração salva, o `tune` vem de
+GRS_IQ_RX_DEFAULT_TUNE_SOURCE (o compose aponta para o sintetizador).
 """
 
 from __future__ import annotations
@@ -34,7 +36,8 @@ def main() -> int:
 
     config_path = pathlib.Path(os.environ.get("GRS_IQ_RX_CONFIG", DEFAULT_CONFIG_PATH))
     try:
-        config = load_config(config_path)
+        config = load_config(
+            config_path, default_tune_source=os.environ.get("GRS_IQ_RX_DEFAULT_TUNE_SOURCE", ""))
     except ValueError as error:
         # Arquivo inválido derruba o boot com a mensagem inteira, em vez de
         # subir com o padrão e receber na frequência errada sem ninguém saber.
