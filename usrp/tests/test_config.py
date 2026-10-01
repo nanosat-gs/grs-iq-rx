@@ -97,3 +97,15 @@ def test_ganho_vazio_vira_none():
 def test_configuracoes_invalidas_sao_recusadas(data, message):
     with pytest.raises(ValueError, match=message):
         SdrConfig.from_dict(data)
+
+
+def test_sem_arquivo_a_sintonia_inicial_vem_do_padrao_do_radio(tmp_path):
+    """O N210 do UHF não pode nascer em 145,9 MHz."""
+    config = load_config(tmp_path / "nao-existe.json", default_center_frequency_hz=468_400_000)
+
+    assert config.center_frequency_hz == 468_400_000.0
+
+
+def test_padrao_de_sintonia_invalido_e_recusado(tmp_path):
+    with pytest.raises(ValueError, match="center_frequency_hz"):
+        load_config(tmp_path / "nao-existe.json", default_center_frequency_hz=-1)

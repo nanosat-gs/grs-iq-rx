@@ -8,7 +8,8 @@
 
 Configuração em GRS_IQ_RX_CONFIG (JSON num volume), editada pelo painel.
 Enquanto não houver configuração salva, o `tune` vem de
-GRS_IQ_RX_DEFAULT_TUNE_SOURCE (o compose aponta para o sintetizador).
+GRS_IQ_RX_DEFAULT_TUNE_SOURCE (o compose aponta para o sintetizador do rádio)
+e a sintonia inicial de GRS_IQ_RX_DEFAULT_CENTER_FREQUENCY_HZ.
 """
 
 from __future__ import annotations
@@ -36,8 +37,12 @@ def main() -> int:
 
     config_path = pathlib.Path(os.environ.get("GRS_IQ_RX_CONFIG", DEFAULT_CONFIG_PATH))
     try:
+        center = os.environ.get("GRS_IQ_RX_DEFAULT_CENTER_FREQUENCY_HZ", "").strip()
         config = load_config(
-            config_path, default_tune_source=os.environ.get("GRS_IQ_RX_DEFAULT_TUNE_SOURCE", ""))
+            config_path,
+            default_tune_source=os.environ.get("GRS_IQ_RX_DEFAULT_TUNE_SOURCE", ""),
+            default_center_frequency_hz=float(center) if center else None,
+        )
     except ValueError as error:
         # Arquivo inválido derruba o boot com a mensagem inteira, em vez de
         # subir com o padrão e receber na frequência errada sem ninguém saber.

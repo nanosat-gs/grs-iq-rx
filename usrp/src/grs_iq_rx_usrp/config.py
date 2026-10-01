@@ -142,19 +142,27 @@ def _number(name: str, value) -> float:
     return float(value)
 
 
-def load_config(path: pathlib.Path, default_tune_source: str = "") -> SdrConfig:
+def load_config(path: pathlib.Path, default_tune_source: str = "",
+                default_center_frequency_hz: float | None = None) -> SdrConfig:
     """O que está salvo, ou o padrão se nada foi salvo ainda.
 
-    `default_tune_source` só vale no padrão: é como o compose liga o receptor
-    ao sintetizador de frequência sem o operador precisar saber disso. Depois
-    do primeiro "Salvar" no painel, manda o que está no arquivo — inclusive
-    vazio, se o operador quis sintonia fixa.
+    Os `default_*` só valem no padrão: é como o compose liga cada receptor ao
+    sintetizador do seu rádio e o sintoniza na faixa certa (o N210 do UHF não
+    pode nascer em 145,9 MHz) sem o operador precisar saber disso. Depois do
+    primeiro "Salvar" no painel, manda o que está no arquivo — inclusive
+    `tune_source` vazio, se o operador quis sintonia fixa.
     """
     if not path.exists():
         default_tune_source = default_tune_source.strip()
         if default_tune_source and not default_tune_source.startswith("tcp://"):
             raise ValueError("tune_source padrão: esperava tcp://... ou vazio")
-        return SdrConfig(tune_source=default_tune_source)
+        config = SdrConfig(tune_source=default_tune_source)
+        if default_center_frequency_hz is not None:
+            if default_center_frequency_hz <= 0:
+                raise ValueError("center_frequency_hz padrão: precisa ser positivo")
+            config = SdrConfig(tune_source=default_tune_source,
+                               center_frequency_hz=float(default_center_frequency_hz))
+        return config
 
     return SdrConfig.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
