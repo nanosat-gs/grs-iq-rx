@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Python (receptor USRP, em usrp/)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
