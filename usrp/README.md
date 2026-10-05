@@ -43,7 +43,25 @@ aceitou** (taxa entregue, sintonia real, ganho, antena), as informações da
 placa, o espectro ao vivo, contadores e o registro de eventos.
 
 A configuração é um JSON no volume `usrp_config` (`GRS_IQ_RX_CONFIG`) e
-sobrevive a restart. Sem o rádio o serviço fica de pé e diz por que não
+sobrevive a restart.
+
+### Configuração inicial, antes do primeiro "Salvar"
+
+Enquanto não existe o JSON salvo, duas variáveis dão o ponto de partida —
+é assim que o compose liga cada rádio à sua cadeia sem o operador precisar
+saber:
+
+| Variável | O quê |
+|---|---|
+| `GRS_IQ_RX_DEFAULT_TUNE_SOURCE` | De onde vem o `tune` (o sintetizador do rádio, ex.: `tcp://grs-frequency-synthesizer:5557`) |
+| `GRS_IQ_RX_DEFAULT_CENTER_FREQUENCY_HZ` | Sintonia inicial (o N210 da UHF não pode nascer em 145,9 MHz) |
+| `GRS_IQ_RX_PANEL_PORT` | Porta do painel (padrão 8091) |
+
+Depois do primeiro "Salvar" no painel vale o arquivo — inclusive com o `tune`
+vazio, se o operador quis sintonia fixa.
+
+A estação roda um receptor por rádio: `grs-iq-rx-usrp` (VHF, painel em
+`127.0.0.1:8091`) e `grs-iq-rx-usrp-uhf` (UHF, painel em `127.0.0.1:8092`). Sem o rádio o serviço fica de pé e diz por que não
 conectou — o receptor em C sai com `EXIT_FAILURE`, e aí não haveria onde
 corrigir o IP.
 

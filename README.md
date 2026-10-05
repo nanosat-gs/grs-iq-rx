@@ -29,15 +29,24 @@
 
 SDR IQ receiver application of the SpaceLab's ground station. This application reads IQ samples from an SDR (RTL-SDR for now) and transmits it over a Pub/Sub ZMQ socket.
 
-### USRP (branch `station`)
+### Branch `station` (nanosat-gs fork)
 
-The [`usrp/`](usrp/) folder holds a second receiver, in Python on top of
-`python3-uhd`, for the USRP N210 used by the nanosat-gs station. It
-publishes the same envelope as the C receiver (one batch per message, no
-topic frame, `cf32_le`, on `:5556`), resamples from a rate the N210 can
-produce exactly (250 kS/s) to the pipeline rate (240 kS/s), follows `tune`
-on `:5557`, and serves a configuration panel (device address, reception,
-connection test) on `:8091`. See [usrp/README.md](usrp/README.md).
+This is the `nanosat-gs` fork, used by the SpaceLab ground station
+([nanosat-gs/grs-station](https://github.com/nanosat-gs/grs-station)). The
+`station` branch is based on upstream `dev` (the C/RTL-SDR implementation, the
+one that actually receives) and adds:
+
+- **Batched IQ** in the C receiver: one ZMQ message per block, no topic frame,
+  `cf32_le`, on `:5556` — the envelope the demodulator and the IQ recorder
+  expect. The C receiver tunes once, from `-f`; it does not follow `tune`.
+- **USRP N210 receiver** in [`usrp/`](usrp/), in Python on top of
+  `python3-uhd`. Same envelope and port as the C receiver; it resamples from a
+  rate the N210 can produce exactly (250 kS/s) to the pipeline rate
+  (240 kS/s), **follows `tune` on `:5557`** (the `grs-frequency-synthesizer`,
+  which applies the Doppler correction), and serves a configuration panel
+  (device address, reception, connection test) on `:8091`. The station runs
+  one per radio: VHF (panel `:8091`) and UHF (panel `:8092`). See
+  [usrp/README.md](usrp/README.md).
 
 ## Dependencies
 
@@ -55,6 +64,11 @@ connection test) on `:8091`. See [usrp/README.md](usrp/README.md).
 ## Building
 
 ```make```
+
+Usage: `grs_iq_rx -h` (device index, frequency, gain, sample rate, bandwidth,
+PPM error, block size...). The RTL-SDR only accepts 225001–300000 and
+900001–3200000 S/s, and outside those ranges the driver silently delivers
+another rate; the ground station uses 240000.
 
 ## Installing
 
